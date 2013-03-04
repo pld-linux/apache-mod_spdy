@@ -1,0 +1,26 @@
+fix:
+
+Exception: Target third_party/apache/aprutil/aprutil.gyp:aprutil#target has an invalid target type 'settings'.  Must be one of executable/loadable_module/static_library/shared_library/none.
+
+--- mod-spdy-0.9.3.3/third_party/apache/apr/apr.gyp~	2013-03-04 11:24:34.000000000 +0200
++++ mod-spdy-0.9.3.3/third_party/apache/apr/apr.gyp	2013-03-04 11:35:09.610648619 +0200
+@@ -192,7 +192,7 @@
+         },
+         {
+           'target_name': 'apr',
+-          'type': 'settings',
++          'type': 'none',
+           'dependencies': [
+             'include',
+           ],
+--- mod-spdy-0.9.3.3/third_party/apache/aprutil/aprutil.gyp~	2013-03-04 11:24:34.000000000 +0200
++++ mod-spdy-0.9.3.3/third_party/apache/aprutil/aprutil.gyp	2013-03-04 11:36:54.408819317 +0200
+@@ -142,7 +142,7 @@
+         },
+         {
+           'target_name': 'aprutil',
+-          'type': 'settings',
++          'type': 'none',
+           'dependencies': [
+             'include',
+           ],

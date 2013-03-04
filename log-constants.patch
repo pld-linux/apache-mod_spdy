@@ -1,0 +1,39 @@
+fix:
+
+third_party/chromium/src/base/logging.h:292:19: error: expected unqualified-id before numeric constant
+
+"fix":
+mod_spdy/mod_spdy.cc: In function 'void {anonymous}::ChildInit(apr_pool_t*, server_rec*)':
+mod_spdy/mod_spdy.cc:253:31: error: 'LOG_INFO' was not declared in this scope
+mod_spdy/mod_spdy.cc:253:31: note: suggested alternative:
+In file included from third_party/chromium/src/net/spdy/spdy_protocol.h:13:0,
+                 from third_party/chromium/src/net/spdy/spdy_framer.h:19,
+                 from ./mod_spdy/common/http_to_spdy_converter.h:24,
+                 from ./mod_spdy/apache/filters/http_to_spdy_filter.h:24,
+                 from mod_spdy/mod_spdy.cc:40:
+third_party/chromium/src/base/logging.h:290:19: note:   'logging::LOG_INFO'
+mod_spdy/mod_spdy.cc:253:45: error: template argument 1 is invalid
+mod_spdy/mod_spdy.cc:253:108: error: invalid type in declaration before ';' token
+--- mod-spdy-0.9.3.3/third_party/chromium/src/base/logging.h~	2013-03-04 11:44:06.000000000 +0200
++++ mod-spdy-0.9.3.3/third_party/chromium/src/base/logging.h	2013-03-04 11:44:09.508892187 +0200
+@@ -286,7 +286,9 @@
+ const LogSeverity LOG_VERBOSE = -1;  // This is level 1 verbosity
+ // Note: the log severities are used to index into the array of names,
+ // see log_severity_names.
++#undef LOG_INFO
+ const LogSeverity LOG_INFO = 0;
++#undef LOG_WARNING
+ const LogSeverity LOG_WARNING = 1;
+ const LogSeverity LOG_ERROR = 2;
+ const LogSeverity LOG_ERROR_REPORT = 3;
+--- mod-spdy-0.9.3.3/mod_spdy/mod_spdy.cc~	2013-03-04 11:24:35.000000000 +0200
++++ mod-spdy-0.9.3.3/mod_spdy/mod_spdy.cc	2013-03-04 11:47:51.855821877 +0200
+@@ -250,7 +250,7 @@
+   // determine the most verbose log level of any server in the list.
+   bool spdy_enabled = false;
+   int max_apache_log_level = APLOG_EMERG;  // the least verbose log level
+-  COMPILE_ASSERT(APLOG_INFO > APLOG_ERR, bigger_number_means_more_verbose);
++  //COMPILE_ASSERT(APLOG_INFO > APLOG_ERR, bigger_number_means_more_verbose);
+   for (server_rec* server = server_list; server != NULL;
+        server = server->next) {
+     spdy_enabled |= mod_spdy::GetServerConfig(server)->spdy_enabled();
