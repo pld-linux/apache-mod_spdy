@@ -1,0 +1,281 @@
+diff -ru orig/build_modssl_with_npn.sh mod/build_modssl_with_npn.sh
+--- orig/build_modssl_with_npn.sh	2013-04-18 18:07:32.000000000 +0200
++++ mod/build_modssl_with_npn.sh	2013-04-18 18:47:14.000000000 +0200
+@@ -94,7 +94,7 @@
+ }
+ 
+ OPENSSL_SRC_TGZ_URL="http://www.openssl.org/source/openssl-1.0.1c.tar.gz"
+-APACHE_HTTPD_SRC_TGZ_URL="http://archive.apache.org/dist/httpd/httpd-2.2.22.tar.gz"
++APACHE_HTTPD_SRC_TGZ_URL="http://archive.apache.org/dist/httpd/httpd-2.4.4.tar.gz"
+ APACHE_HTTPD_MODSSL_NPN_PATCH_PATH="$(dirname $0)/scripts/mod_ssl_with_npn.patch"
+ 
+ OPENSSL_SRC_TGZ=$(basename $OPENSSL_SRC_TGZ_URL)
+@@ -113,7 +113,7 @@
+ pushd $BUILDROOT >/dev/null
+ 
+ download_file $OPENSSL_SRC_TGZ_URL $OPENSSL_SRC_TGZ ae412727c8c15b67880aef7bd2999b2e
+-download_file $APACHE_HTTPD_SRC_TGZ_URL $APACHE_HTTPD_SRC_TGZ d77fa5af23df96a8af68ea8114fa6ce1
++download_file $APACHE_HTTPD_SRC_TGZ_URL $APACHE_HTTPD_SRC_TGZ a2fed766e67c9681e0d9b86768f08286
+ 
+ echo ""
+ 
+diff -ru orig/mod_spdy/apache/apache_spdy_stream_task_factory.cc mod/mod_spdy/apache/apache_spdy_stream_task_factory.cc
+--- orig/mod_spdy/apache/apache_spdy_stream_task_factory.cc	2013-04-18 18:08:10.000000000 +0200
++++ mod/mod_spdy/apache/apache_spdy_stream_task_factory.cc	2013-04-18 20:16:43.000000000 +0200
+@@ -98,8 +98,8 @@
+   slave_connection_->base_server = master_connection->base_server;
+   slave_connection_->local_addr = master_connection->local_addr;
+   slave_connection_->local_ip = master_connection->local_ip;
+-  slave_connection_->remote_addr = master_connection->remote_addr;
+-  slave_connection_->remote_ip = master_connection->remote_ip;
++  slave_connection_->client_addr = master_connection->client_addr;
++  slave_connection_->client_ip = master_connection->client_ip;
+ 
+   // We're supposed to pass a socket object to ap_process_connection below, but
+   // there's no meaningful object to pass for this slave connection, because
+diff -ru orig/mod_spdy/apache/log_message_handler.cc mod/mod_spdy/apache/log_message_handler.cc
+--- orig/mod_spdy/apache/log_message_handler.cc	2013-04-18 18:08:10.000000000 +0200
++++ mod/mod_spdy/apache/log_message_handler.cc	2013-04-18 20:21:31.000000000 +0200
+@@ -22,6 +22,7 @@
+ // #defined LOG_* as numbers. This conflicts with what we are using those here.
+ #undef HAVE_SYSLOG
+ #include "http_log.h"
++APLOG_USE_MODULE(spdy);
+ 
+ #include "base/debug/debugger.h"
+ #include "base/debug/stack_trace.h"
+diff -ru orig/mod_spdy/mod_spdy.cc mod/mod_spdy/mod_spdy.cc
+--- orig/mod_spdy/mod_spdy.cc	2013-04-18 18:07:32.000000000 +0200
++++ mod/mod_spdy/mod_spdy.cc	2013-04-18 20:31:56.000000000 +0200
+@@ -254,8 +254,8 @@
+   for (server_rec* server = server_list; server != NULL;
+        server = server->next) {
+     spdy_enabled |= mod_spdy::GetServerConfig(server)->spdy_enabled();
+-    if (server->loglevel > max_apache_log_level) {
+-      max_apache_log_level = server->loglevel;
++    if (server->log.level > max_apache_log_level) {
++      max_apache_log_level = server->log.level;
+     }
+   }
+ 
+diff -ru orig/scripts/mod_ssl_with_npn.patch mod/scripts/mod_ssl_with_npn.patch
+--- orig/scripts/mod_ssl_with_npn.patch	2013-04-18 18:08:10.000000000 +0200
++++ mod/scripts/mod_ssl_with_npn.patch	2013-04-18 19:29:03.000000000 +0200
+@@ -1,21 +1,60 @@
+-Index: modules/ssl/ssl_private.h
+-===================================================================
+---- modules/ssl/ssl_private.h	(revision 1367982)
+-+++ modules/ssl/ssl_private.h	(working copy)
+-@@ -603,6 +603,7 @@
+- #ifndef OPENSSL_NO_TLSEXT
+- int          ssl_callback_ServerNameIndication(SSL *, int *, modssl_ctx_t *);
+- #endif
+-+int ssl_callback_AdvertiseNextProtos(SSL *ssl, const unsigned char **data, unsigned int *len, void *arg);
++diff -ru modules/ssl/mod_ssl.c modules/ssl/mod_ssl.c
++--- modules/ssl/mod_ssl.c	2012-12-11 10:55:03.000000000 +0100
+++++ modules/ssl/mod_ssl.c	2013-04-18 19:20:51.000000000 +0200
++@@ -272,6 +272,18 @@
++     AP_END_CMD
++ };
++ 
+++/* Implement 'modssl_run_npn_advertise_protos_hook'. */
+++APR_IMPLEMENT_OPTIONAL_HOOK_RUN_ALL(
+++    modssl, AP, int, npn_advertise_protos_hook,
+++    (conn_rec *connection, apr_array_header_t *protos),
+++    (connection, protos), OK, DECLINED);
+++
+++/* Implement 'modssl_run_npn_proto_negotiated_hook'. */
+++APR_IMPLEMENT_OPTIONAL_HOOK_RUN_ALL(
+++    modssl, AP, int, npn_proto_negotiated_hook,
+++    (conn_rec *connection, const char *proto_name, apr_size_t proto_name_len),
+++    (connection, proto_name, proto_name_len), OK, DECLINED);
+++
++ /*
++  *  the various processing hooks
++  */
++diff -ru modules/ssl/mod_ssl.h modules/ssl/mod_ssl.h
++--- modules/ssl/mod_ssl.h	2011-09-23 15:38:09.000000000 +0200
+++++ modules/ssl/mod_ssl.h	2013-04-18 19:20:51.000000000 +0200
++@@ -63,5 +63,26 @@
+  
+- /**  Session Cache Support  */
+- void         ssl_scache_init(server_rec *, apr_pool_t *);
+-Index: modules/ssl/ssl_engine_init.c
+-===================================================================
+---- modules/ssl/ssl_engine_init.c	(revision 1367982)
+-+++ modules/ssl/ssl_engine_init.c	(working copy)
+-@@ -559,6 +559,11 @@
+-     SSL_CTX_set_tmp_dh_callback(ctx,  ssl_callback_TmpDH);
++ APR_DECLARE_OPTIONAL_FN(int, ssl_engine_disable, (conn_rec *));
++ 
+++/** The npn_advertise_protos optional hook allows other modules to add entries
+++ * to the list of protocol names advertised by the server during the Next
+++ * Protocol Negotiation (NPN) portion of the SSL handshake.  The hook callee is
+++ * given the connection and an APR array; it should push one or more char*'s
+++ * pointing to null-terminated strings (such as "http/1.1" or "spdy/2") onto
+++ * the array and return OK, or do nothing and return DECLINED. */
+++APR_DECLARE_EXTERNAL_HOOK(modssl, AP, int, npn_advertise_protos_hook,
+++                          (conn_rec *connection, apr_array_header_t *protos));
+++
+++/** The npn_proto_negotiated optional hook allows other modules to discover the
+++ * name of the protocol that was chosen during the Next Protocol Negotiation
+++ * (NPN) portion of the SSL handshake.  Note that this may be the empty string
+++ * (in which case modules should probably assume HTTP), or it may be a protocol
+++ * that was never even advertised by the server.  The hook callee is given the
+++ * connection, a non-null-terminated string containing the protocol name, and
+++ * the length of the string; it should do something appropriate (i.e. insert or
+++ * remove filters) and return OK, or do nothing and return DECLINED. */
+++APR_DECLARE_EXTERNAL_HOOK(modssl, AP, int, npn_proto_negotiated_hook,
+++                          (conn_rec *connection, const char *proto_name,
+++                           apr_size_t proto_name_len));
+++
++ #endif /* __MOD_SSL_H__ */
++ /** @} */
++diff -ru modules/ssl/ssl_engine_init.c modules/ssl/ssl_engine_init.c
++--- modules/ssl/ssl_engine_init.c	2012-12-11 10:55:03.000000000 +0100
+++++ modules/ssl/ssl_engine_init.c	2013-04-18 19:20:51.000000000 +0200
++@@ -725,6 +725,11 @@
++ #endif
+  
+      SSL_CTX_set_info_callback(ctx, ssl_callback_Info);
+ +
+@@ -26,11 +65,10 @@
+  }
+  
+  static void ssl_init_ctx_verify(server_rec *s,
+-Index: modules/ssl/ssl_engine_io.c
+-===================================================================
+---- modules/ssl/ssl_engine_io.c	(revision 1367982)
+-+++ modules/ssl/ssl_engine_io.c	(working copy)
+-@@ -338,6 +338,7 @@
++diff -ru modules/ssl/ssl_engine_io.c modules/ssl/ssl_engine_io.c
++--- modules/ssl/ssl_engine_io.c	2012-09-21 17:10:12.000000000 +0200
+++++ modules/ssl/ssl_engine_io.c	2013-04-18 19:20:51.000000000 +0200
++@@ -297,6 +297,7 @@
+      apr_pool_t *pool;
+      char buffer[AP_IOBUFSIZE];
+      ssl_filter_ctx_t *filter_ctx;
+@@ -38,7 +76,7 @@
+  } bio_filter_in_ctx_t;
+  
+  /*
+-@@ -1409,6 +1410,27 @@
++@@ -1385,6 +1386,27 @@
+          APR_BRIGADE_INSERT_TAIL(bb, bucket);
+      }
+  
+@@ -66,22 +104,21 @@
+      return APR_SUCCESS;
+  }
+  
+-@@ -1753,6 +1775,7 @@
++@@ -1866,6 +1888,7 @@
+      inctx->block = APR_BLOCK_READ;
+      inctx->pool = c->pool;
+      inctx->filter_ctx = filter_ctx;
+ +    inctx->npn_finished = 0;
+  }
+  
+- void ssl_io_filter_init(conn_rec *c, SSL *ssl)
+-Index: modules/ssl/ssl_engine_kernel.c
+-===================================================================
+---- modules/ssl/ssl_engine_kernel.c	(revision 1367982)
+-+++ modules/ssl/ssl_engine_kernel.c	(working copy)
+-@@ -2104,3 +2104,84 @@
+-     return 0;
++ /* The request_rec pointer is passed in here only to ensure that the
++diff -ru modules/ssl/ssl_engine_kernel.c modules/ssl/ssl_engine_kernel.c
++--- modules/ssl/ssl_engine_kernel.c	2012-12-11 10:55:03.000000000 +0100
+++++ modules/ssl/ssl_engine_kernel.c	2013-04-18 19:20:51.000000000 +0200
++@@ -2186,3 +2186,84 @@
+  }
+- #endif
++ 
++ #endif /* OPENSSL_NO_SRP */
+ +
+ +#ifdef HAVE_TLS_NPN
+ +/*
+@@ -163,66 +200,11 @@
+ +    return SSL_TLSEXT_ERR_OK;
+ +}
+ +#endif
+-Index: modules/ssl/mod_ssl.c
+-===================================================================
+---- modules/ssl/mod_ssl.c	(revision 1367982)
+-+++ modules/ssl/mod_ssl.c	(working copy)
+-@@ -220,6 +220,18 @@
+-     AP_END_CMD
+- };
+- 
+-+/* Implement 'modssl_run_npn_advertise_protos_hook'. */
+-+APR_IMPLEMENT_OPTIONAL_HOOK_RUN_ALL(
+-+    modssl, AP, int, npn_advertise_protos_hook,
+-+    (conn_rec *connection, apr_array_header_t *protos),
+-+    (connection, protos), OK, DECLINED);
+-+
+-+/* Implement 'modssl_run_npn_proto_negotiated_hook'. */
+-+APR_IMPLEMENT_OPTIONAL_HOOK_RUN_ALL(
+-+    modssl, AP, int, npn_proto_negotiated_hook,
+-+    (conn_rec *connection, const char *proto_name, apr_size_t proto_name_len),
+-+    (connection, proto_name, proto_name_len), OK, DECLINED);
+-+
+- /*
+-  *  the various processing hooks
+-  */
+-Index: modules/ssl/mod_ssl.h
+-===================================================================
+---- modules/ssl/mod_ssl.h	(revision 1367982)
+-+++ modules/ssl/mod_ssl.h	(working copy)
+-@@ -60,5 +60,26 @@
+- 
+- APR_DECLARE_OPTIONAL_FN(apr_array_header_t *, ssl_extlist_by_oid, (request_rec *r, const char *oidstr));
+- 
+-+/** The npn_advertise_protos optional hook allows other modules to add entries
+-+ * to the list of protocol names advertised by the server during the Next
+-+ * Protocol Negotiation (NPN) portion of the SSL handshake.  The hook callee is
+-+ * given the connection and an APR array; it should push one or more char*'s
+-+ * pointing to null-terminated strings (such as "http/1.1" or "spdy/2") onto
+-+ * the array and return OK, or do nothing and return DECLINED. */
+-+APR_DECLARE_EXTERNAL_HOOK(modssl, AP, int, npn_advertise_protos_hook,
+-+                          (conn_rec *connection, apr_array_header_t *protos));
+-+
+-+/** The npn_proto_negotiated optional hook allows other modules to discover the
+-+ * name of the protocol that was chosen during the Next Protocol Negotiation
+-+ * (NPN) portion of the SSL handshake.  Note that this may be the empty string
+-+ * (in which case modules should probably assume HTTP), or it may be a protocol
+-+ * that was never even advertised by the server.  The hook callee is given the
+-+ * connection, a non-null-terminated string containing the protocol name, and
+-+ * the length of the string; it should do something appropriate (i.e. insert or
+-+ * remove filters) and return OK, or do nothing and return DECLINED. */
+-+APR_DECLARE_EXTERNAL_HOOK(modssl, AP, int, npn_proto_negotiated_hook,
+-+                          (conn_rec *connection, const char *proto_name,
+-+                           apr_size_t proto_name_len));
+-+
+- #endif /* __MOD_SSL_H__ */
+- /** @} */
+-Index: modules/ssl/ssl_toolkit_compat.h
+-===================================================================
+---- modules/ssl/ssl_toolkit_compat.h	(revision 1367982)
+-+++ modules/ssl/ssl_toolkit_compat.h	(working copy)
+-@@ -145,6 +145,11 @@
+- #define HAVE_FIPS
++diff -ru modules/ssl/ssl_private.h modules/ssl/ssl_private.h
++--- modules/ssl/ssl_private.h	2012-12-11 10:55:03.000000000 +0100
+++++ modules/ssl/ssl_private.h	2013-04-18 19:20:51.000000000 +0200
++@@ -149,6 +149,11 @@
++ #define OPENSSL_NO_EC
+  #endif
+  
+ +#if OPENSSL_VERSION_NUMBER >= 0x10001000L && !defined(OPENSSL_NO_NEXTPROTONEG) \
+@@ -233,3 +215,11 @@
+  #ifndef PEM_F_DEF_CALLBACK
+  #ifdef PEM_F_PEM_DEF_CALLBACK
+  /** In OpenSSL 0.9.8 PEM_F_DEF_CALLBACK was renamed */
++@@ -614,6 +619,7 @@
++     unsigned char aes_key[16];
++ } modssl_ticket_key_t;
++ #endif
+++int ssl_callback_AdvertiseNextProtos(SSL *ssl, const unsigned char **data, unsigned int *len, void *arg);
++ 
++ typedef struct SSLSrvConfigRec SSLSrvConfigRec;
++ 
