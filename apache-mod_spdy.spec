@@ -1,3 +1,7 @@
+#
+# Conditional build:
+%bcond_with	werror		# build with "-Werror" enabled
+
 %define		mod_name	spdy
 %define 	apxs		%{_sbindir}/apxs
 Summary:	Apache 2 module to enable SPDY support
@@ -40,6 +44,7 @@ CXX="%{__cxx}" \
 	--format=make \
 	--depth=. \
 	build/all.gyp \
+	%{!?with_werror:-Dwerror=} \
 	-Duse_openssl=1 \
 	-Duse_system_apache_dev=1 \
 	-Duse_system_libjpeg=1 \
