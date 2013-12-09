@@ -4,7 +4,7 @@
 
 %define		mod_name	spdy
 %define 	apxs		%{_sbindir}/apxs
-Summary:	Apache 2 module to enable SPDY support
+Summary:	Apache module to enable SPDY support
 Name:		apache-mod_%{mod_name}
 Version:	0.9.3.3
 Release:	1
@@ -17,6 +17,7 @@ Source2:	gclient.conf
 Patch0:		gyp.patch
 Patch1:		log-constants.patch
 Patch2:		apache2.4.patch
+Patch3:		system-zlib.patch
 URL:		http://code.google.com/p/mod-spdy/
 BuildRequires:	%{apxs}
 BuildRequires:	apache-devel >= 2.2
@@ -38,6 +39,7 @@ the SPDY protocol for serving HTTP resources.
 %patch0 -p1
 %patch1 -p1
 %patch2 -p1
+%patch3 -p1
 
 %build
 CC="%{__cc}" \
