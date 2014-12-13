@@ -1,6 +1,8 @@
 # NOTE:
 # - apache 2.4 patch https://code.google.com/p/mod-spdy/issues/detail?id=64
 #   and a fork (due lack of response in upstream): https://github.com/eousphoros/mod-spdy
+# - donated to asf http://googledevelopers.blogspot.com/2014/06/modspdy-is-now-apache-project.html
+#   whose repo is at https://svn.apache.org/repos/asf/httpd/mod_spdy/trunk/
 #
 # Conditional build:
 %bcond_with	werror		# build with "-Werror" enabled
