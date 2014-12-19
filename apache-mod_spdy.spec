@@ -26,6 +26,7 @@ Patch3:		system-zlib.patch
 URL:		http://code.google.com/p/mod-spdy/
 BuildRequires:	%{apxs}
 BuildRequires:	apache-devel >= 2.2
+BuildRequires:	minizip-devel
 BuildRequires:	tar >= 1:1.22
 BuildRequires:	xz
 Requires:	apache(modules-api) = %apache_modules_api
